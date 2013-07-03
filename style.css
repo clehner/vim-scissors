@@ -1,0 +1,23 @@
+body {
+	margin: 4em;
+}
+
+body::after {
+	background-color: yellow;
+	content: 'asd adoi sdoaisdff asasa asdfasdfsd';
+	display: block;
+	margin: 5em auto 1em;
+	padding: 2em;
+	border-top-left-radius: 2em;
+	border-bottom-left-radius: 2em;
+}
+
+h1 {
+	font-size: 3em;
+	color: purple;
+}
+
+p {
+	font-size: 2em;
+	color: green;
+}
