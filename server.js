@@ -68,7 +68,7 @@ function openSheetInVimClient(sheet, client) {
       newSheet = new Sheet(sheet.name, bufferText);
     } catch(e) {
       // CSS Error
-      buffer.showBalloon(e.toString().replace(/['"]/g, ''));
+      // buffer.showBalloon(e.toString().replace(/['"]/g, ''));
       return;
     }
     var diff = sheet.getRulesDiff(newSheet);
