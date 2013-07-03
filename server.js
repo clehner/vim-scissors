@@ -73,8 +73,9 @@ function openSheetInVimClient(sheet, client) {
       return;
     }
     var diff = sheet.getRulesDiff(newSheet);
-    //console.log('diff', diff);
-    sheet.cssRules = newSheet.cssRules;
+    // allow each client to have their own server-side version of the sheet
+    // to make diffs from
+    sheets[sheet.name] = sheet = newSheet;
 
     wsBroadcast({
       type: 'rulesDiff',
