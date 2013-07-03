@@ -1,5 +1,4 @@
 /*jshint indent:2 */
-var log    = console.log.bind(log);
 var WebSS  = require('ws').Server;
 var http   = require('http');
 var nb     = require('vim-netbeans');
@@ -116,18 +115,22 @@ function openSheetInVimClients(sheet) {
 }
 
 function openSheetsInVimClient(client) {
+  console.log("> Vim client connection");
   for (var name in sheets) {
     var sheet = sheets[name];
     openSheetInVimClient(sheet, client);
   }
+  client.on("disconnected", function() {
+    console.log("> Vim client disconnected");
+  });
 }
 
 wss.on('connection', function(ws) {
-  log("> CONNECTION");
+  console.log("> Websocket connection");
   sockets.push(ws);
 
   ws.on('close', function() {
-    log("> CLIENT DISCONNECT");
+    console.log("> Websocket disconnected");
     sockets.splice(sockets.indexOf(ws), 1);
   });
 
