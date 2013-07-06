@@ -47,7 +47,7 @@ function wsBroadcast(event, cb) {
 }
 
 function handleError(err) {
-  if (err) console.error(err);
+  if (err) throw err;
 }
 
 function setBufferText(buffer, text, cb) {
@@ -114,7 +114,7 @@ function openSheetInVimClients(sheet) {
   });
 }
 
-function openSheetsInVimClient(client) {
+function openSheetsInVimClient(client, password) {
   console.log("> Vim client connection");
   for (var name in sheets) {
     var sheet = sheets[name];
@@ -147,11 +147,13 @@ wss.on('connection', function(ws) {
       var ourSheet = sheets[name];
       if (ourSheet) {
         var rulesDiff = theirSheet.getRulesDiff(ourSheet);
-        ws.send(JSON.stringify({
-          type: 'rulesDiff',
-          sheetName: name,
-          rulesDiff: rulesDiff
-        }));
+        if (rulesDiff.length > 0) {
+          ws.send(JSON.stringify({
+            type: 'rulesDiff',
+            sheetName: name,
+            rulesDiff: rulesDiff
+          }), handleError);
+        }
       } else {
         sheets[name] = theirSheet;
         openSheetInVimClients(theirSheet);

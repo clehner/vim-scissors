@@ -15,6 +15,10 @@ function ruleDiffToText(rule) {
 // wrap and sync a CSSStyleSheet
 function Sheet(sheet, i) {
 	if (!(this instanceof Sheet)) return new Sheet(sheet, i);
+	if (!sheet.cssRules) {
+		this.bad = true;
+		return;
+	}
 	this.sheet = sheet;
 	if (sheet.ownerNode.nodeName == 'STYLE') {
 		// todo: generate name based on page filename
@@ -22,7 +26,7 @@ function Sheet(sheet, i) {
 	} else {
 		this.name = sheet.href.substr(sheet.href.lastIndexOf('/') + 1);
 	}
-	this.cssRules = [].slice.call(sheet.rules);
+	this.cssRules = [].slice.call(sheet.cssRules);
 }
 
 Sheet.prototype.openOnServer = function() {
@@ -63,6 +67,7 @@ Sheet.prototype.applyDiff = function(rulesDiff) {
 
 function captureStylesheets() {
 	[].slice.call(document.styleSheets).map(Sheet).forEach(function (sheet) {
+		if (sheet.bad) return;
 		sheets[sheet.name] = sheet;
 		sheet.openOnServer();
 	});
@@ -74,7 +79,7 @@ var url = 'ws' + scriptSrc.match(/s?:s?.*\//);
 var conn = new WebSocket(url);
 
 conn.onerror = function(err) {
-	alert(err);
+	throw err;
 };
 
 conn.onopen = captureStylesheets;
