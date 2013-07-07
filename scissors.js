@@ -13,27 +13,27 @@ function ruleDiffToText(rule) {
 }
 
 // wrap and sync a CSSStyleSheet
-function Sheet(sheet, i) {
-	if (!(this instanceof Sheet)) return new Sheet(sheet, i);
-	if (!sheet.cssRules) {
-		this.bad = true;
-		return;
-	}
+function Sheet(name, sheet) {
 	this.sheet = sheet;
+	this.name = name;
+	this.cssRules = [].slice.call(sheet.cssRules);
+	/*
 	if (sheet.ownerNode.nodeName == 'STYLE') {
 		// todo: generate name based on page filename
 		this.name = 'style' + i + '.css';
 	} else {
 		this.name = sheet.href.substr(sheet.href.lastIndexOf('/') + 1);
 	}
-	this.cssRules = [].slice.call(sheet.cssRules);
+	*/
 }
 
-Sheet.prototype.openOnServer = function() {
-	conn.send(JSON.stringify({
+Sheet.prototype.openOnServer = function(contents, type) {
+	conn.send(JSON.stringify(a={
 		type: "openSheet",
-		sheetName: this.name,
-		sheetRules: this.cssRules.map(cssRuleToText)
+		name: this.name,
+		source: contents,
+		cssType: type,
+		cssRules: this.cssRules.map(cssRuleToText)
 	}));
 };
 
@@ -65,17 +65,57 @@ Sheet.prototype.applyDiff = function(rulesDiff) {
 	});
 };
 
-function captureStylesheets() {
-	[].slice.call(document.styleSheets).map(Sheet).forEach(function (sheet) {
-		if (sheet.bad) return;
-		sheets[sheet.name] = sheet;
-		sheet.openOnServer();
-	});
+function xhr(url, cb) {
+	var req = new XMLHttpRequest();
+	req.open('GET', url, true);
+	req.onreadystatechange = function () {
+		if (req.readyState == 4) {
+			cb(req.responseText);
+			delete req.onreadystatechange;
+			delete req;
+		}
+	};
+	req.send(null);
 }
 
-var scripts = document.getElementsByTagName('script');
-var scriptSrc = scripts[scripts.length-1].src;
-var url = 'ws' + scriptSrc.match(/s?:s?.*\//);
+function openStylesheet(name, type, sheet, contents) {
+	var resource = new Sheet(name, sheet);
+	sheets[name] = resource;
+	resource.openOnServer(contents, type);
+}
+
+function captureStylesheet(link) {
+	var path = link.href.replace(location.origin, '');
+	var relPath = path.replace(location.pathname, '');
+	if (link.rel == 'stylesheet') {
+		if (!link.sheet || !link.sheet.cssRules) {
+			//console.log('Unreachable stylesheet', path);
+			return;
+		}
+		xhr(link.href, openStylesheet.bind(this, relPath, 'css', link.sheet));
+
+	} else if (link.rel == 'stylesheet/less') {
+		var id = path.replace(/\//g, '-').replace(/^-*(.*)\.(.*?)$/, '$2:$1');
+		var style = document.getElementById(id);
+		var sheet = style && style.sheet;
+		if (!sheet || !sheet.cssRules) {
+			console.log('Creating Less stylesheet for', id);
+			style = document.createElement('style');
+			document.getElementsByTagName('head')[0].appendChild(style);
+		}
+		xhr(link.href, openStylesheet.bind(this, relPath, 'less', style.sheet));
+	}
+}
+
+function captureStylesheets() {
+	[].slice.call(document.getElementsByTagName('link')).forEach(captureStylesheet);
+}
+
+var myScript = (function(scripts) {
+	return scripts[scripts.length-1];
+})(document.getElementsByTagName('script'));
+
+var url = 'ws' + myScript.src.match(/s?:s?.*\//);
 var conn = new WebSocket(url);
 
 conn.onerror = function(err) {
@@ -85,12 +125,7 @@ conn.onerror = function(err) {
 conn.onopen = captureStylesheets;
 
 conn.onmessage = function(msg) {
-	var event;
-	try {
-		event = JSON.parse(msg.data);
-	} catch(e) {
-		return;
-	}
+	var event = JSON.parse(msg.data);
 
 	if (event.type == 'rulesDiff') {
 		var sheet = sheets[event.sheetName];

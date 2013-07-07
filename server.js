@@ -3,8 +3,8 @@ var WebSS  = require('ws').Server;
 var http   = require('http');
 var nb     = require('vim-netbeans');
 var fs     = require('fs');
-var Sheet  = require('./lib/sheet');
 var debounce = require('./lib/debounce');
+var sheetTypes = require('./lib/sheet');
 
 var nbServer = new nb.VimServer({'debug': 0});
 var sheets = {};
@@ -62,13 +62,10 @@ function setBufferText(buffer, text, cb) {
 function openSheetInVimClient(sheet, client) {
   var buffer, bufferText = '';
 
-  var handleChanges = debounce(function() {
-    var newSheet;
-    try {
-      newSheet = new Sheet(sheet.name, bufferText);
-    } catch(e) {
-      // CSS Error
-      // buffer.showBalloon(e.toString().replace(/['"]/g, ''));
+  function onSheetParsed(error) {
+    var newSheet = this;
+    if (error) {
+      // Parsing error
       return;
     }
     var diff = sheet.getRulesDiff(newSheet);
@@ -81,11 +78,16 @@ function openSheetInVimClient(sheet, client) {
       sheetName: sheet.name,
       rulesDiff: diff
     }, handleError);
-  }, 50);
+  }
+
+  var handleChanges = debounce(function() {
+    var newSheet = sheet.clone(bufferText);
+    newSheet.once('parsed', onSheetParsed);
+  });
 
   client.editFile(sheet.name, function(buf) {
     buffer = buf;
-    var css = sheet.getCSSText();
+    var css = sheet.getText();
     setBufferText(buffer, css, function(err) {
       if (err) console.error('Error setting text', err);
       bufferText = css;
@@ -135,28 +137,44 @@ wss.on('connection', function(ws) {
   });
 
   ws.on('message', function(msg) {
+    var event;
     try {
-      var event = JSON.parse(msg);
+      event = JSON.parse(msg);
     } catch(e) {
       return;
     }
     if (event.type == 'openSheet') {
-      var name = event.sheetName;
-      var rules = event.sheetRules;
+      var name = event.name;
+      var rules = event.cssRules;
+      var Sheet = event.cssType == 'less' ?
+        sheetTypes.LESSSheet : sheetTypes.CSSSheet;
       var theirSheet = new Sheet(name, rules);
       var ourSheet = sheets[name];
-      if (ourSheet) {
-        var rulesDiff = theirSheet.getRulesDiff(ourSheet);
-        if (rulesDiff.length > 0) {
-          ws.send(JSON.stringify({
-            type: 'rulesDiff',
-            sheetName: name,
-            rulesDiff: rulesDiff
-          }), handleError);
+      var source = event.source;
+      if (!ourSheet) {
+        // if the sheet is new to the server, keep its source
+        // and normalize the client's sheet to our parsed version of the source
+        if (source) {
+          ourSheet = sheets[name] = new Sheet(name, source);
+        } else {
+          // no source means we make a text version of the rules they sent
+          sheets[name] = theirSheet;
         }
-      } else {
-        sheets[name] = theirSheet;
-        openSheetInVimClients(theirSheet);
+        var sheet = sheets[name];
+        sheet.on('parsed', openSheetInVimClients.bind(this, sheet));
+      }
+      if (ourSheet) {
+        ourSheet.once('parsed', function() {
+          // get the client to the server's version of the sheet
+          var rulesDiff = theirSheet.getRulesDiff(ourSheet);
+          if (rulesDiff.length > 0) {
+            ws.send(JSON.stringify({
+              type: 'rulesDiff',
+              sheetName: name,
+              rulesDiff: rulesDiff
+            }), handleError);
+          }
+        });
       }
     }
   });
