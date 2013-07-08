@@ -33,7 +33,7 @@ var httpServer = http.createServer(function(req, res) {
 });
 
 nbServer.on('clientAuthed', openSheetsInVimClient);
-nbServer.listen(3221);
+nbServer.listen(process.env.PORT || 3219);
 nbServer.handleHTTP(httpServer);
 
 var wss = new WebSS({server: httpServer});
