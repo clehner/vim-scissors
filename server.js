@@ -70,7 +70,7 @@ function openSheetInVimClient(sheet, client) {
       return;
     }
     var diff = sheet.getRulesDiff(newSheet);
-    if (diff.length == 0) return;
+    if (!diff.length) return;
     // allow each client to have their own server-side version of the sheet
     // to make diffs from
     sheets[sheet.name] = sheet = newSheet;

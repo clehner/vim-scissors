@@ -80,6 +80,7 @@ function cssRuleToObject(rule) {
 function Sheet(name, sheet) {
 	this.sheet = sheet;
 	this.name = name;
+	this.cssRules = [].slice.call(sheet.cssRules);
 	/*
 	if (sheet.ownerNode.nodeName == 'STYLE') {
 		// todo: generate name based on page filename
@@ -145,23 +146,61 @@ function applyRuleDiff(rule, ruleDiff) {
 
 Sheet.prototype.applyDiff = function(rulesDiff) {
 	var sheet = this.sheet,
-		rules = sheet.cssRules,
-		skip = 0;
+		rules = this.cssRules,
+		skip = 0,
+		index = 0;
 	for (var i = 0; i < rulesDiff.length; i++) {
 		var ruleDiff = rulesDiff[i];
 		if (ruleDiff.skip) {
 			skip += ruleDiff.skip;
 		}
+		var rule = rules[i + skip];
 		if (ruleDiff.remove) {
 			for (var j = 0; j < ruleDiff.remove; j++) {
-				console.log('deleting rule', i + skip, 'out of', sheet.cssRules.length);
-				sheet.deleteRule(i + skip);
+				index = i + skip;
+				rule = rules[index];
+				rules.splice(index, 1);
+				//console.log('deleting rule', i + skip, 'out of', rules.length);
+				if (rule.dummy) {
+					continue;
+				}
+				if (rule != sheet.cssRules[index]) {
+					// Rule moved. Find where it went.
+					index = rules.indexOf.call(sheet.cssRules, rule);
+					if (index == -1) {
+						console.error('Rule disappeared', rule);
+						continue;
+					}
+				}
+				try {
+					sheet.deleteRule(index);
+				} catch(e) {
+					// Browser didn't support the rule, or something removed it
+					console.error('Unable to delete rule', rule);
+				}
 			}
 		}
-		var rule = rules[i + skip];
+		rule = rules[i + skip];
 		if (!rule || ruleDiff.insert) {
+			if (ruleDiff.insert) {
+				ruleDiff = ruleDiff.insert;
+			}
 			if (ruleDiff.type) {
-				sheet.insertRule(ruleToString(ruleDiff), i + skip);
+				try {
+					//console.log('inserting rule', i + skip, rules.length, sheet.cssRules.length);
+					// can't insert rule at too high an index
+					index = Math.min(i + skip, sheet.cssRules.length);
+					sheet.insertRule(ruleToString(ruleDiff), index);
+					rule = sheet.cssRules[index];
+				} catch(e) {
+					// Unsupported CSS. Use a dummy rule.
+					console.log('Using dummy rule for', ruleDiff);
+					rule = {
+						dummy: true,
+						style: {}
+					};
+				}
+				rules.splice(i + skip, 0, rule);
 			}
 		} else {
 			applyRuleDiff(rule, ruleDiff);
