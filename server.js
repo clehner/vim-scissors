@@ -164,7 +164,7 @@ wss.on('connection', function(ws) {
         sheet.on('parsed', openSheetInVimClients.bind(this, sheet));
       }
       if (ourSheet) {
-        ourSheet.once('parsed', function() {
+        theirSheet.once('parsed', function() {
           // get the client to the server's version of the sheet
           var rulesDiff = theirSheet.getRulesDiff(ourSheet);
           if (rulesDiff.length > 0) {

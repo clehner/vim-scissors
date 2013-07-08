@@ -1,22 +1,78 @@
 var sheets = {};
 
-function cssRuleToText(rule) {
-	return rule.cssText;
+var CSSKeyframesRule =
+	window.WebKitCSSKeyframesRule ||
+	window.MozCSSKeyframesRule ||
+	window.CSSKeyframesRule;
+
+function isKeyframesRule(rule) {
+	return (rule instanceof CSSKeyframesRule);
 }
 
-function ruleDiffToText(rule) {
+var cssDeclarationRegexp = /\s*(.*?):\s*(.*?);/g;
+
+function styleObject(domStyle) {
+	var cssText = domStyle.cssText,
+		style = {};
+	for (var m;
+		(m = cssDeclarationRegexp.exec(cssText));
+		style[m[1]] = m[2]);
+	return style;
+}
+
+function styleToString(style) {
 	var declarations = [];
-	for (var prop in rule.style) {
-		declarations.push(prop + ': ' + rule.style[prop] + ';');
+	for (var prop in style) {
+		declarations.push(prop + ': ' + style[prop] + ';');
 	}
-	return rule.selectorText + ' {' + declarations.join(' ') + ' }';
+	return '{' + declarations.join(' ') + ' }';
+}
+
+function keyframeRuleToString(rule) {
+	return rule.keyText + styleToString(rule.style);
+}
+
+var vendor = '-webkit-';
+
+function ruleToString(rule) {
+	if (rule.type == 'rule') {
+		return rule.selectorText + styleToString(rule.style);
+	} else if (rule.type == 'keyframes') {
+		return '@' + vendor + 'keyframes ' + rule.name + '{' +
+			rule.keyframes.map(keyframeRuleToString).join(' ') + ' }';
+	} else {
+		console.error('Unknown type of rule', rule);
+	}
+}
+
+function cssKeyframeToObject(keyframe) {
+	return {
+		keyText: keyframe.keyText,
+		style: styleObject(keyframe.style)
+	};
+}
+
+function cssRuleToObject(rule) {
+	if (isKeyframesRule(rule)) {
+		var keyframeRules = [].slice.call(rule.cssRules);
+		return {
+			type: 'keyframes',
+			name: rule.name,
+			keyframes: keyframeRules.map(cssKeyframeToObject)
+		};
+	} else {
+		return {
+			type: 'rule',
+			selectorText: rule.selectorText,
+			style: styleObject(rule.style)
+		};
+	}
 }
 
 // wrap and sync a CSSStyleSheet
 function Sheet(name, sheet) {
 	this.sheet = sheet;
 	this.name = name;
-	this.cssRules = [].slice.call(sheet.cssRules);
 	/*
 	if (sheet.ownerNode.nodeName == 'STYLE') {
 		// todo: generate name based on page filename
@@ -28,41 +84,83 @@ function Sheet(name, sheet) {
 }
 
 Sheet.prototype.openOnServer = function(contents, type) {
-	conn.send(JSON.stringify(a={
+	conn.send(JSON.stringify({
 		type: "openSheet",
 		name: this.name,
 		source: contents,
 		cssType: type,
-		cssRules: this.cssRules.map(cssRuleToText)
+		cssRules: [].slice.call(this.sheet.cssRules).map(cssRuleToObject)
 	}));
 };
 
-Sheet.prototype.applyDiff = function(rulesDiff) {
-	var rules = this.cssRules;
-	var offset = 0;
-	var sheet = this.sheet;
-	rulesDiff.forEach(function (ruleDiff, i) {
-		var index = ruleDiff.index + offset;
-		var rule = rules[index];
-		if (ruleDiff.remove) {
-			sheet.deleteRule(index);
-			rules.splice(index, 1);
-			offset--;
-			return;
+function applyKeyframesDiff(keyframesRule, keyframesDiff) {
+	var keyframeRules = keyframesRule.cssRules,
+		skip = 0;
+	for (var i = 0; i < keyframesDiff.length; i++) {
+		var keyframeDiff = keyframesDiff[i];
+		if (keyframeDiff.skip) {
+			skip += keyframeDiff.skip;
 		}
-		if (!rule) {
-			sheet.insertRule(ruleDiffToText(ruleDiff), index);
-			rule = sheet.cssRules[index];
-			rules.splice(index, 0, rule);
-			offset++;
+		if (keyframeDiff.remove) {
+			for (var j = 0; j < keyframeDiff.remove; j++) {
+				keyframesRule.deleteRule(i + skip);
+			}
 		}
+		var keyframe = keyframeRules[i + skip];
+		if (!keyframe || keyframeDiff.insert) {
+			keyframesRule.insertRule(keyframeRuleToString(keyframeDiff), i + skip);
+		} else {
+			if (keyframeDiff.keyText) {
+				keyframe.keyText = keyframeDiff.keyText;
+			}
+			for (var prop in keyframeDiff.style || 0) {
+				keyframe.style[prop] = keyframeDiff.style[prop] || '';
+			}
+		}
+	}
+}
+
+function applyRuleDiff(rule, ruleDiff) {
+	if (isKeyframesRule(rule)) {
+		// keyText, style
+		if (ruleDiff.name) {
+			rule.name = ruleDiff.name;
+		}
+		if (ruleDiff.keyframes) {
+			applyKeyframesDiff(rule, ruleDiff.keyframes);
+		}
+
+	} else {
 		if (ruleDiff.selectorText) {
 			rule.selectorText = ruleDiff.selectorText;
 		}
 		for (var prop in ruleDiff.style) {
 			rule.style[prop] = ruleDiff.style[prop] || '';
 		}
-	});
+	}
+}
+
+Sheet.prototype.applyDiff = function(rulesDiff) {
+	var sheet = this.sheet,
+		rules = sheet.cssRules,
+		skip = 0;
+	for (var i = 0; i < rulesDiff.length; i++) {
+		var ruleDiff = rulesDiff[i];
+		if (ruleDiff.skip) {
+			skip += ruleDiff.skip;
+		}
+		if (ruleDiff.remove) {
+			for (var j = 0; j < ruleDiff.remove; j++) {
+				sheet.deleteRule(i + skip);
+			}
+		}
+		var rule = rules[i + skip];
+		if (!rule || ruleDiff.insert) {
+			sheet.insertRule(ruleToString(ruleDiff), i + skip);
+		} else {
+			applyRuleDiff(rule, ruleDiff);
+		}
+	}
 };
 
 function xhr(url, cb) {
@@ -72,7 +170,6 @@ function xhr(url, cb) {
 		if (req.readyState == 4) {
 			cb(req.responseText);
 			delete req.onreadystatechange;
-			delete req;
 		}
 	};
 	req.send(null);
@@ -88,7 +185,11 @@ function captureStylesheet(link) {
 	var path = link.href.replace(location.origin, '');
 	var relPath = path.replace(location.pathname, '');
 	if (link.rel == 'stylesheet') {
-		if (!link.sheet || !link.sheet.cssRules) {
+		var cssRules;
+		try {
+			cssRules = link.sheet && link.sheet.cssRules;
+		} catch(e) {}
+		if (!cssRules) {
 			//console.log('Unreachable stylesheet', path);
 			return;
 		}
@@ -108,7 +209,8 @@ function captureStylesheet(link) {
 }
 
 function captureStylesheets() {
-	[].slice.call(document.getElementsByTagName('link')).forEach(captureStylesheet);
+	var links = document.getElementsByTagName('link');
+	[].slice.call(links).forEach(captureStylesheet);
 }
 
 var myScript = (function(scripts) {
@@ -122,12 +224,16 @@ conn.onerror = function(err) {
 	throw err;
 };
 
-conn.onopen = captureStylesheets;
+conn.onopen = function() {
+	captureStylesheets();
+	console.log("Connected");
+};
 
 conn.onmessage = function(msg) {
 	var event = JSON.parse(msg.data);
 
 	if (event.type == 'rulesDiff') {
+		//console.log('diff', msg.data);
 		var sheet = sheets[event.sheetName];
 		if (!sheet) {
 			console.error('Unknown sheet', event.sheetName);
@@ -138,4 +244,5 @@ conn.onmessage = function(msg) {
 };
 
 conn.onclose = function() {
+	console.log("Disconnected");
 };
