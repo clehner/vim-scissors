@@ -38,27 +38,34 @@ function ruleToString(rule) {
 	if (rule.type == 'rule') {
 		return rule.selectorText + styleToString(rule.style);
 	} else if (rule.type == 'keyframes') {
-		return '@' + vendor + 'keyframes ' + rule.name + '{' +
-			rule.keyframes.map(keyframeRuleToString).join(' ') + ' }';
+		var keyframes = [];
+		for (var key in rule.keyframes) {
+			var style = rule.keyframes[key].style;
+			keyframes.push('\n' + key + ' ' + styleToString(style));
+		}
+		return '@' + vendor + 'keyframes ' + rule.name +
+			' {\n' + keyframes.join('\n') + '\n}';
+	} else if (rule.type == 'comment') {
+		return '/*' + rule.comment + '*/';
 	} else {
 		console.error('Unknown type of rule', rule);
 	}
 }
 
-function cssKeyframeToObject(keyframe) {
-	return {
-		keyText: keyframe.keyText,
-		style: styleObject(keyframe.style)
-	};
-}
-
 function cssRuleToObject(rule) {
 	if (isKeyframesRule(rule)) {
-		var keyframeRules = [].slice.call(rule.cssRules);
+		var keyframes = {};
+		for (var i = 0; i < rule.cssRules.length; i++) {
+			var keyframe = rule.cssRules[i];
+			keyframes[keyframe.keyText] = {
+				keyText: keyframe.keyText,
+				style: styleObject(keyframe.style)
+			};
+		}
 		return {
 			type: 'keyframes',
 			name: rule.name,
-			keyframes: keyframeRules.map(cssKeyframeToObject)
+			keyframes: keyframes
 		};
 	} else {
 		return {
@@ -94,21 +101,17 @@ Sheet.prototype.openOnServer = function(contents, type) {
 };
 
 function applyKeyframesDiff(keyframesRule, keyframesDiff) {
-	var keyframeRules = keyframesRule.cssRules,
-		skip = 0;
-	for (var i = 0; i < keyframesDiff.length; i++) {
-		var keyframeDiff = keyframesDiff[i];
-		if (keyframeDiff.skip) {
-			skip += keyframeDiff.skip;
+	var keyframeRules = keyframesRule.cssRules;
+	for (var key in keyframesDiff) {
+		var keyframeDiff = keyframesDiff[key];
+		if (!keyframeDiff) {
+			keyframesRule.deleteRule(key);
+			continue;
 		}
-		if (keyframeDiff.remove) {
-			for (var j = 0; j < keyframeDiff.remove; j++) {
-				keyframesRule.deleteRule(i + skip);
-			}
-		}
-		var keyframe = keyframeRules[i + skip];
-		if (!keyframe || keyframeDiff.insert) {
-			keyframesRule.insertRule(keyframeRuleToString(keyframeDiff), i + skip);
+		var keyframe = keyframesRule.findRule(key);
+		if (!keyframe) {
+			var keyframeText = keyframeRuleToString(keyframeDiff);
+			keyframesRule.insertRule(keyframeText);
 		} else {
 			if (keyframeDiff.keyText) {
 				keyframe.keyText = keyframeDiff.keyText;
@@ -151,12 +154,15 @@ Sheet.prototype.applyDiff = function(rulesDiff) {
 		}
 		if (ruleDiff.remove) {
 			for (var j = 0; j < ruleDiff.remove; j++) {
+				console.log('deleting rule', i + skip, 'out of', sheet.cssRules.length);
 				sheet.deleteRule(i + skip);
 			}
 		}
 		var rule = rules[i + skip];
 		if (!rule || ruleDiff.insert) {
-			sheet.insertRule(ruleToString(ruleDiff), i + skip);
+			if (ruleDiff.type) {
+				sheet.insertRule(ruleToString(ruleDiff), i + skip);
+			}
 		} else {
 			applyRuleDiff(rule, ruleDiff);
 		}
@@ -233,7 +239,7 @@ conn.onmessage = function(msg) {
 	var event = JSON.parse(msg.data);
 
 	if (event.type == 'rulesDiff') {
-		//console.log('diff', msg.data);
+		//console.log('diff', event);
 		var sheet = sheets[event.sheetName];
 		if (!sheet) {
 			console.error('Unknown sheet', event.sheetName);

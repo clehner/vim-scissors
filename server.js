@@ -66,9 +66,11 @@ function openSheetInVimClient(sheet, client) {
     var newSheet = this;
     if (error) {
       // Parsing error
+      //console.log('Parsing error', error);
       return;
     }
     var diff = sheet.getRulesDiff(newSheet);
+    if (diff.length == 0) return;
     // allow each client to have their own server-side version of the sheet
     // to make diffs from
     sheets[sheet.name] = sheet = newSheet;
