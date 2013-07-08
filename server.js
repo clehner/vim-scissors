@@ -96,11 +96,13 @@ function openSheetInVimClient(sheet, client) {
     });
 
     buffer.on("insert", function(offset, text) {
-      bufferText = bufferText.substr(0, offset) + text + bufferText.substr(offset);
+      bufferText = bufferText.substr(0, offset) + text +
+        bufferText.substr(offset);
       handleChanges();
     });
     buffer.on("remove", function(offset, length) {
-      bufferText = bufferText.substr(0, offset) + bufferText.substr(offset + length);
+      bufferText = bufferText.substr(0, offset) +
+        bufferText.substr(offset + length);
       handleChanges();
     });
     buffer.on("fileOpened", function() {

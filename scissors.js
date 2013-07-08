@@ -102,7 +102,6 @@ Sheet.prototype.openOnServer = function(contents, type) {
 };
 
 function applyKeyframesDiff(keyframesRule, keyframesDiff) {
-	var keyframeRules = keyframesRule.cssRules;
 	for (var key in keyframesDiff) {
 		var keyframeDiff = keyframesDiff[key];
 		if (!keyframeDiff) {
@@ -170,6 +169,8 @@ Sheet.prototype.applyDiff = function(rulesDiff) {
 					if (index == -1) {
 						console.error('Rule disappeared', rule);
 						continue;
+					} else {
+						//console.log('rule moved from', skip+i, 'to', index);
 					}
 				}
 				try {
@@ -187,14 +188,14 @@ Sheet.prototype.applyDiff = function(rulesDiff) {
 			}
 			if (ruleDiff.type) {
 				try {
-					//console.log('inserting rule', i + skip, rules.length, sheet.cssRules.length);
 					// can't insert rule at too high an index
 					index = Math.min(i + skip, sheet.cssRules.length);
+					//console.log('inserting rule', ruleDiff, index);
 					sheet.insertRule(ruleToString(ruleDiff), index);
 					rule = sheet.cssRules[index];
 				} catch(e) {
 					// Unsupported CSS. Use a dummy rule.
-					console.log('Using dummy rule for', ruleDiff);
+					//console.log('Using dummy rule for', ruleDiff);
 					rule = {
 						dummy: true,
 						style: {}
@@ -203,6 +204,7 @@ Sheet.prototype.applyDiff = function(rulesDiff) {
 				rules.splice(i + skip, 0, rule);
 			}
 		} else {
+			//console.log('applying rule diff', rule, ruleDiff);
 			applyRuleDiff(rule, ruleDiff);
 		}
 	}
