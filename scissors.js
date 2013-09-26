@@ -229,7 +229,8 @@ function openStylesheet(name, type, sheet, contents) {
 }
 
 function captureStylesheet(link) {
-	var path = link.href.replace(location.origin, '');
+	var origin = location.origin || (location.protocol + '//' + location.host);
+	var path = link.href.replace(origin, '');
 	var relPath = path.replace(location.pathname, '');
 	if (link.rel == 'stylesheet') {
 		var cssRules;

@@ -55,6 +55,7 @@ use from browsers on multiple machines.
   extension, such as LiveReload.
 - Clean up code for diffing CSS. Factor out code common to both client and
   server.
+- Improve cross-browser compatibility
 
 ## License
 
