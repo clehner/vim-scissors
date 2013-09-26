@@ -1,0 +1,28 @@
+{
+  "name": "vim-scissors",
+  "version": "0.0.1",
+  "description": "Live editing CSS in Vim",
+  "main": "scissors.js",
+  "dependencies": {
+    "vim-netbeans": "~2.0.0",
+    "ws": "~0.4.31",
+    "less": "~1.4.2",
+    "css-parse": "~1.5.3"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/clehner/vim-scissors.git"
+  },
+  "keywords": [
+    "vim",
+    "css"
+  ],
+  "author": "Charles Lehner",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/clehner/vim-scissors/issues"
+  }
+}
