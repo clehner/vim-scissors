@@ -6,6 +6,9 @@ var fs     = require('fs');
 var debounce = require('./lib/debounce');
 var sheetTypes = require('./lib/sheet');
 
+var listenPort = process.env.PORT || 3219;
+var listenHost = process.env.HOST || '0.0.0.0';
+
 var nbServer = new nb.VimServer({'debug': 0});
 var sheets = {};
 
@@ -33,7 +36,7 @@ var httpServer = http.createServer(function(req, res) {
 });
 
 nbServer.on('clientAuthed', openSheetsInVimClient);
-nbServer.listen(process.env.PORT || 3219);
+nbServer.listen(listenPort, listenHost);
 nbServer.handleHTTP(httpServer);
 
 var wss = new WebSS({server: httpServer});
