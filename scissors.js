@@ -5,9 +5,10 @@ var CSSKeyframesRule =
 	window.MozCSSKeyframesRule ||
 	window.CSSKeyframesRule;
 
-function isKeyframesRule(rule) {
-	return (rule instanceof CSSKeyframesRule);
-}
+var CSSMediaRule =
+	window.WebKitCSSMediaRule ||
+	window.MozCSSMediaRule ||
+	window.CSSMediaRule;
 
 var cssDeclarationRegexp = /\s*(.*?):\s*(.*?);/g;
 
@@ -45,6 +46,9 @@ function ruleToString(rule) {
 		}
 		return '@' + vendor + 'keyframes ' + rule.name +
 			' {\n' + keyframes.join('\n') + '\n}';
+	} else if (rule.type == 'media') {
+		return '@media ' + rule.mediaText + ' {\n' +
+			ruleToString(rule) + '\n}';
 	} else if (rule.type == 'comment') {
 		return '/*' + rule.comment + '*/';
 	} else {
@@ -53,7 +57,7 @@ function ruleToString(rule) {
 }
 
 function cssRuleToObject(rule) {
-	if (isKeyframesRule(rule)) {
+	if (rule instanceof CSSKeyframesRule) {
 		var keyframes = {};
 		for (var i = 0; i < rule.cssRules.length; i++) {
 			var keyframe = rule.cssRules[i];
@@ -66,6 +70,12 @@ function cssRuleToObject(rule) {
 			type: 'keyframes',
 			name: rule.name,
 			keyframes: keyframes
+		};
+	} else if (rule instanceof CSSMediaRule) {
+		return {
+			type: 'media',
+			mediaText: rule.mediaText,
+			rules: [].map.call(rule.cssRules, cssRuleToObject)
 		};
 	} else {
 		return {
@@ -124,7 +134,7 @@ function applyKeyframesDiff(keyframesRule, keyframesDiff) {
 }
 
 function applyRuleDiff(rule, ruleDiff) {
-	if (isKeyframesRule(rule)) {
+	if (rule instanceof CSSKeyframesRule) {
 		// keyText, style
 		if (ruleDiff.name) {
 			rule.name = ruleDiff.name;
@@ -159,7 +169,7 @@ Sheet.prototype.applyDiff = function(rulesDiff) {
 				index = i + skip;
 				rule = rules[index];
 				rules.splice(index, 1);
-				//console.log('deleting rule', i + skip, 'out of', rules.length);
+				//console.log('deleting rule', i + skip, 'out of', rules.length)
 				if (rule.dummy) {
 					continue;
 				}
