@@ -48,7 +48,7 @@ function ruleToString(rule) {
 			' {\n' + keyframes.join('\n') + '\n}';
 	} else if (rule.type == 'media') {
 		return '@media ' + rule.mediaText + ' {\n' +
-			ruleToString(rule) + '\n}';
+			rule.rules.map(ruleToString).join('\n\n') + '\n}';
 	} else if (rule.type == 'comment') {
 		return '/*' + rule.comment + '*/';
 	} else {
