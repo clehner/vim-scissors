@@ -490,7 +490,7 @@ function openStylesheet(name, type, sheet, contents) {
 function captureStylesheet(link) {
 	var origin = location.origin || (location.protocol + '//' + location.host);
 	var path = link.href.replace(origin, '');
-	var relPath = path.replace(location.pathname, '');
+	var name = link.getAttribute('href');
 	if (link.rel == 'stylesheet') {
 		var cssRules;
 		try {
@@ -500,7 +500,7 @@ function captureStylesheet(link) {
 			//console.log('Unreachable stylesheet', path);
 			return;
 		}
-		xhr(link.href, openStylesheet.bind(this, relPath, 'css', link.sheet));
+		xhr(link.href, openStylesheet.bind(this, name, 'css', link.sheet));
 
 	} else if (link.rel == 'stylesheet/less') {
 		var id = path.replace(/\//g, '-').replace(/^-*(.*)\.(.*?)$/, '$2:$1');
@@ -511,7 +511,7 @@ function captureStylesheet(link) {
 			style = document.createElement('style');
 			document.getElementsByTagName('head')[0].appendChild(style);
 		}
-		xhr(link.href, openStylesheet.bind(this, relPath, 'less', style.sheet));
+		xhr(link.href, openStylesheet.bind(this, name, 'less', style.sheet));
 	}
 }
 
