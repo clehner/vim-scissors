@@ -10,87 +10,55 @@ var CSSMediaRule =
 	window.MozCSSMediaRule ||
 	window.CSSMediaRule;
 
-var cssDeclarationRegexp = /\s*(.*?):\s*(.*?);/g;
+function Style() {}
 
-function styleObject(domStyle) {
-	var cssText = domStyle.cssText,
-		style = {};
+Style.declarationRegexp = /\s*(.*?):\s*(.*?);/g;
+
+Style.prototype.initCSS = function(domStyle) {
+	this.domStyle = domStyle;
+	this.style = {};
+	var cssText = domStyle.cssText;
 	for (var m;
-		(m = cssDeclarationRegexp.exec(cssText));
-		style[m[1]] = m[2]);
-	return style;
-}
+		(m = Style.declarationRegexp.exec(cssText));
+		this.style[m[1]] = m[2]);
+	return this;
+};
 
-function styleToString(style) {
+Style.prototype.setCSSStyle = function(domStyle) {
+	this.domStyle = domStyle;
+};
+
+Style.prototype.initJSON = function(obj) {
+	this.style = obj;
+	return this;
+};
+
+Style.prototype.toString = function() {
 	var declarations = [];
-	for (var prop in style) {
-		declarations.push(prop + ': ' + style[prop] + ';');
+	for (var prop in this.style) {
+		declarations.push(prop + ': ' + this.style[prop] + ';');
 	}
 	return '{' + declarations.join(' ') + ' }';
-}
+};
 
-function keyframeRuleToString(rule) {
-	return rule.keyText + styleToString(rule.style);
-}
+Style.prototype.toJSON = function() {
+	return this.style;
+};
+
+Style.prototype.applyDiff = function(diff) {
+	for (var prop in diff) {
+		// todo: domStyle.setProperty(prop, value, priority)
+		this.domStyle[prop] = this.style[prop] = diff[prop] || '';
+	}
+};
 
 var vendor = '-webkit-';
-
-function ruleToString(rule) {
-	if (rule.type == 'rule') {
-		return rule.selectorText + styleToString(rule.style);
-	} else if (rule.type == 'keyframes') {
-		var keyframes = [];
-		for (var key in rule.keyframes) {
-			var style = rule.keyframes[key].style;
-			keyframes.push('\n' + key + ' ' + styleToString(style));
-		}
-		return '@' + vendor + 'keyframes ' + rule.name +
-			' {\n' + keyframes.join('\n') + '\n}';
-	} else if (rule.type == 'media') {
-		return '@media ' + rule.mediaText + ' {\n' +
-			rule.rules.map(ruleToString).join('\n\n') + '\n}';
-	} else if (rule.type == 'comment') {
-		return '/*' + rule.comment + '*/';
-	} else {
-		console.error('Unknown type of rule', rule);
-	}
-}
-
-function cssRuleToObject(rule) {
-	if (rule instanceof CSSKeyframesRule) {
-		var keyframes = {};
-		for (var i = 0; i < rule.cssRules.length; i++) {
-			var keyframe = rule.cssRules[i];
-			keyframes[keyframe.keyText] = {
-				keyText: keyframe.keyText,
-				style: styleObject(keyframe.style)
-			};
-		}
-		return {
-			type: 'keyframes',
-			name: rule.name,
-			keyframes: keyframes
-		};
-	} else if (rule instanceof CSSMediaRule) {
-		return {
-			type: 'media',
-			mediaText: rule.mediaText,
-			rules: [].map.call(rule.cssRules, cssRuleToObject)
-		};
-	} else {
-		return {
-			type: 'rule',
-			selectorText: rule.selectorText,
-			style: styleObject(rule.style)
-		};
-	}
-}
 
 // wrap and sync a CSSStyleSheet
 function Sheet(name, sheet) {
 	this.sheet = sheet;
 	this.name = name;
-	this.cssRules = [].slice.call(sheet.cssRules);
+	this.rules = new RulesList().initCSS(sheet);
 	/*
 	if (sheet.ownerNode.nodeName == 'STYLE') {
 		// todo: generate name based on page filename
@@ -107,75 +75,303 @@ Sheet.prototype.openOnServer = function(contents, type) {
 		name: this.name,
 		source: contents,
 		cssType: type,
-		cssRules: [].slice.call(this.sheet.cssRules).map(cssRuleToObject)
+		cssRules: this.rules.toJSON()
 	}));
 };
 
-function applyKeyframesDiff(keyframesRule, keyframesDiff) {
-	for (var key in keyframesDiff) {
-		var keyframeDiff = keyframesDiff[key];
-		if (!keyframeDiff) {
-			keyframesRule.deleteRule(key);
-			continue;
-		}
-		var keyframe = keyframesRule.findRule(key);
-		if (!keyframe) {
-			var keyframeText = keyframeRuleToString(keyframeDiff);
-			keyframesRule.insertRule(keyframeText);
-		} else {
-			if (keyframeDiff.keyText) {
-				keyframe.keyText = keyframeDiff.keyText;
-			}
-			for (var prop in keyframeDiff.style || 0) {
-				keyframe.style[prop] = keyframeDiff.style[prop] || '';
-			}
+Sheet.prototype.applyDiff = function(diff) {
+	this.rules.applyDiff(diff.rules);
+	// todo: diff mediaText
+};
+
+/* Regular CSS Rule */
+
+function Rule() {}
+
+Rule.types = {
+	'rule': Rule,
+	'keyframes': KeyframesRule,
+	'media': MediaRule,
+	'comment': Comment
+};
+
+Rule.fromCSSRule = function(cssRule) {
+	var MyRule =
+		cssRule instanceof CSSKeyframesRule ? KeyframesRule :
+		cssRule instanceof CSSMediaRule ? MediaRule :
+		Rule;
+	return new MyRule().initCSS(cssRule);
+};
+
+Rule.fromJSON = function(obj) {
+	var MyRule = Rule.types[obj.type];
+	if (!MyRule) {
+		console.error('Unknown type of rule', obj);
+		return;
+	}
+	return new MyRule().initJSON(obj);
+};
+
+Rule.prototype.initCSS = function(cssRule) {
+	this.cssRule = cssRule;
+	this.selectorText = cssRule.selectorText;
+	this.style = new Style().initCSS(cssRule.style);
+	return this;
+};
+
+Rule.prototype.setCSSRule = function(cssRule) {
+	this.cssRule = cssRule;
+	this.style.setCSSStyle(cssRule.style);
+	return this;
+};
+
+Rule.prototype.initJSON = function(obj) {
+	this.selectorText = obj.selectorText;
+	this.style = new Style().initJSON(obj.style);
+	return this;
+};
+
+Rule.prototype.toString = function() {
+	return this.selectorText + this.style.toString();
+};
+
+Rule.prototype.toJSON = function() {
+	return {
+		type: 'rule',
+		selectorText: this.selectorText,
+		style: this.style.toJSON()
+	};
+};
+
+Rule.prototype.applyDiff = function(diff) {
+	if (diff.selectorText) {
+		this.cssRule.selectorText = this.selectorText = diff.selectorText;
+	}
+	if (diff.style) {
+		this.style.applyDiff(diff.style);
+	}
+};
+
+/* Keyframes Rule */
+
+function KeyframesRule() {}
+
+KeyframesRule.prototype.initCSS = function(cssRule) {
+	this.cssRule = cssRule;
+	this.name = cssRule.name;
+	this.keyframes = {};
+	for (var i = 0; i < cssRule.cssRules.length; i++) {
+		var keyframe = new Keyframe().initCSS(cssRule.cssRules[i]);
+		this.keyframes[keyframe.keyText] = keyframe;
+	}
+	return this;
+};
+
+KeyframesRule.prototype.setCSSRule = function(cssRule) {
+	this.cssRule = cssRule;
+	return this;
+};
+
+KeyframesRule.prototype.initJSON = function(obj) {
+	this.name = obj.name;
+	this.keyframes = {};
+	for (var key in obj) {
+		this.keyframes[key] = new Keyframe().initJSON(obj);
+	}
+	return this;
+};
+
+KeyframesRule.prototype.toString = function() {
+	var keyframes = [];
+	for (var key in this.keyframes) {
+		keyframes.push(this.keyframes[key].toString());
+	}
+	return '@' + vendor + 'keyframes ' + this.name +
+		' {\n' + keyframes.join('\n\n') + '\n}';
+};
+
+KeyframesRule.prototype.toJSON = function() {
+	return {
+		type: 'keyframes',
+		name: this.name,
+		keyframes: this.keyframes.toJSON()
+	};
+};
+
+KeyframesRule.prototype.applyDiff = function(diff) {
+	if (diff.name) {
+		this.cssRule.name = this.name = diff.name;
+	}
+	if (diff.keyframes) {
+		for (var key in diff.keyframes) {
+			this.applyKeyframeDiff(diff, diff.keyframes[key]);
 		}
 	}
-}
+};
 
-function applyRuleDiff(rule, ruleDiff) {
-	if (rule instanceof CSSKeyframesRule) {
-		// keyText, style
-		if (ruleDiff.name) {
-			rule.name = ruleDiff.name;
-		}
-		if (ruleDiff.keyframes) {
-			applyKeyframesDiff(rule, ruleDiff.keyframes);
-		}
-
+KeyframesRule.prototype.applyKeyframeDiff = function (key, diff) {
+	if (!diff) {
+		delete this.keyframes[key];
+		this.cssRule.deleteRule(key);
+		return;
+	}
+	var keyframe = this.keyframes[key];
+	var cssKeyframe = this.cssRule.findRule(key);
+	if (keyframe != cssKeyframe) {
+		console.error('Mismatched keyframe');
+	}
+	if (!keyframe) {
+		keyframe = new Keyframe().initJSON(diff);
+		this.cssRule.insertRule(keyframe.toString());
 	} else {
-		if (ruleDiff.selectorText) {
-			rule.selectorText = ruleDiff.selectorText;
-		}
-		for (var prop in ruleDiff.style) {
-			rule.style[prop] = ruleDiff.style[prop] || '';
+		keyframe.applyDiff(diff);
+	}
+};
+
+/* Keyframe */
+
+function Keyframe() {}
+
+Keyframe.prototype.initCSS = function(cssKeyframe) {
+	this.cssKeyframe = cssKeyframe;
+	this.keyText = cssKeyframe.keyText;
+	this.style = new Style().initCSS(cssKeyframe.style);
+	return this;
+};
+
+Keyframe.prototype.initJSON = function(obj) {
+	this.keyText = obj.keyText;
+	this.style = new Style().initJSON(obj.style);
+	return this;
+};
+
+Keyframe.prototype.toString = function() {
+	return this.keyText + ' ' + this.style.toString();
+};
+
+Keyframe.prototype.toJSON = function() {
+	return {
+		keyText: this.keyText,
+		style: this.style.toJSON()
+	};
+};
+
+Keyframe.prototype.applyDiff = function(diff) {
+	if (diff.keyText) {
+		this.keyText = this.cssKeyframe.keyText = diff.keyText;
+	}
+	if (diff.style) {
+		var style = this.cssKeyframe.style;
+		for (var prop in diff.style) {
+			this.style[prop] = style[prop] = diff.style[prop] || '';
 		}
 	}
-}
+};
 
-Sheet.prototype.applyDiff = function(rulesDiff) {
-	var sheet = this.sheet,
-		rules = this.cssRules,
-		skip = 0,
+/* Media Rule */
+
+function MediaRule() {}
+
+MediaRule.prototype.initCSS = function(cssRule) {
+	this.cssRule = cssRule;
+	this.mediaText = cssRule.media.mediaText;
+	this.rules = new RulesList().initCSS(cssRule);
+	return this;
+};
+
+MediaRule.prototype.setCSSRule = function(cssRule) {
+	this.cssRule = cssRule;
+};
+
+MediaRule.prototype.initJSON = function(obj) {
+	this.mediaText = obj.mediaText;
+	this.rules = new RulesList().initJSON(obj.rules);
+	return this;
+};
+
+MediaRule.prototype.toString = function() {
+	return '@media ' + this.mediaText + ' {\n' +
+		this.rules.toString() + '\n}';
+};
+
+MediaRule.prototype.toJSON = function() {
+	return {
+		type: 'media',
+		mediaText: this.mediaText,
+		rules: this.rules.toJSON()
+	};
+};
+
+MediaRule.prototype.applyDiff = function(diff) {
+	if (diff.mediaText) {
+		this.mediaText = diff.mediaText;
+		this.cssRule.mediaText = diff.mediaText;
+	}
+	if (diff.rules) {
+		this.rules.applyDiff(diff.rules);
+	}
+};
+
+/* Comment */
+
+function Comment() {}
+
+Comment.prototype.initJSON = function(obj) {
+	this.text = obj;
+};
+
+Comment.prototype.toString = function() {
+	return '/*' + this.text + '*/';
+};
+
+/* Rules List */
+
+function RulesList() {}
+
+RulesList.prototype.initCSS = function(sheet) {
+	// note: sheet may be a CSSMediaRule
+	this.sheet = sheet;
+	this.rules = [].map.call(sheet.cssRules, Rule.fromCSSRule);
+	return this;
+};
+
+RulesList.prototype.initJSON = function(obj) {
+	this.rules = obj.map(Rule.fromJSON);
+	return this;
+};
+
+RulesList.prototype.toJSON = function() {
+	return this.rules.map(function (rule) {
+		return rule.toJSON();
+	});
+};
+
+RulesList.prototype.toString = function() {
+	// implicit toString on each rule
+	return this.rules.join('\n\n');
+};
+
+RulesList.prototype.applyDiff = function(diff) {
+	var skip = 0,
 		index = 0;
-	for (var i = 0; i < rulesDiff.length; i++) {
-		var ruleDiff = rulesDiff[i];
+	for (var i = 0; i < diff.length; i++) {
+		var ruleDiff = diff[i];
 		if (ruleDiff.skip) {
 			skip += ruleDiff.skip;
 		}
-		var rule = rules[i + skip];
+		var rule = this.rules[i + skip];
 		if (ruleDiff.remove) {
 			for (var j = 0; j < ruleDiff.remove; j++) {
 				index = i + skip;
-				rule = rules[index];
-				rules.splice(index, 1);
+				rule = this.rules[index];
+				this.rules.splice(index, 1);
 				//console.log('deleting rule', i + skip, 'out of', rules.length)
 				if (rule.dummy) {
 					continue;
 				}
-				if (rule != sheet.cssRules[index]) {
+				if (rule.cssRule != this.sheet.cssRules[index]) {
 					// Rule moved. Find where it went.
-					index = rules.indexOf.call(sheet.cssRules, rule);
+					index = [].indexOf.call(this.sheet.cssRules, rule.cssRule);
 					if (index == -1) {
 						console.error('Rule disappeared', rule);
 						continue;
@@ -184,14 +380,14 @@ Sheet.prototype.applyDiff = function(rulesDiff) {
 					}
 				}
 				try {
-					sheet.deleteRule(index);
+					this.sheet.deleteRule(index);
 				} catch(e) {
 					// Browser didn't support the rule, or something removed it
 					console.error('Unable to delete rule', rule);
 				}
 			}
 		}
-		rule = rules[i + skip];
+		rule = this.rules[i + skip];
 		if (!rule || ruleDiff.insert) {
 			if (ruleDiff.insert) {
 				ruleDiff = ruleDiff.insert;
@@ -199,23 +395,24 @@ Sheet.prototype.applyDiff = function(rulesDiff) {
 			if (ruleDiff.type) {
 				try {
 					// can't insert rule at too high an index
-					index = Math.min(i + skip, sheet.cssRules.length);
+					index = Math.min(i + skip, this.sheet.cssRules.length);
 					//console.log('inserting rule', ruleDiff, index);
-					sheet.insertRule(ruleToString(ruleDiff), index);
-					rule = sheet.cssRules[index];
+					rule = Rule.fromJSON(ruleDiff);
+					this.sheet.insertRule(rule.toString(), index);
+					rule.setCSSRule(this.sheet.cssRules[index]);
 				} catch(e) {
 					// Unsupported CSS. Use a dummy rule.
-					//console.log('Using dummy rule for', ruleDiff);
+					console.log('Using dummy rule for', ruleDiff, 'because', e);
 					rule = {
 						dummy: true,
 						style: {}
 					};
 				}
-				rules.splice(i + skip, 0, rule);
+				this.rules.splice(i + skip, 0, rule);
 			}
 		} else {
 			//console.log('applying rule diff', rule, ruleDiff);
-			applyRuleDiff(rule, ruleDiff);
+			rule.applyDiff(ruleDiff);
 		}
 	}
 };

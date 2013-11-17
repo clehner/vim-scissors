@@ -72,8 +72,11 @@ function openSheetInVimClient(sheet, client) {
       //console.log('Parsing error', error);
       return;
     }
-    var diff = sheet.getRulesDiff(newSheet);
-    if (!diff.length) return;
+    var diff = sheet.getDiff(newSheet);
+    if (!diff) {
+      console.log('empty diff');
+      return;
+    }
     // allow each client to have their own server-side version of the sheet
     // to make diffs from
     sheets[sheet.name] = sheet = newSheet;
@@ -173,8 +176,8 @@ wss.on('connection', function(ws) {
       if (ourSheet) {
         theirSheet.once('parsed', function() {
           // get the client to the server's version of the sheet
-          var rulesDiff = theirSheet.getRulesDiff(ourSheet);
-          if (rulesDiff.length > 0) {
+          var rulesDiff = theirSheet.getDiff(ourSheet);
+          if (rulesDiff) {
             ws.send(JSON.stringify({
               type: 'rulesDiff',
               sheetName: name,
