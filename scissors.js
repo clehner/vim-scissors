@@ -13,6 +13,7 @@ var CSSMediaRule =
 function Style() {}
 
 Style.declarationRegexp = /\s*(.*?):\s*(.*?);/g;
+Style.priorityRegep = /(.*) ?!important/;
 
 Style.prototype.initCSS = function(domStyle) {
 	this.domStyle = domStyle;
@@ -47,8 +48,15 @@ Style.prototype.toJSON = function() {
 
 Style.prototype.applyDiff = function(diff) {
 	for (var prop in diff) {
-		// todo: domStyle.setProperty(prop, value, priority)
-		this.domStyle[prop] = this.style[prop] = diff[prop] || '';
+		var value = diff[prop] || '';
+		this.domStyle[prop] = value;
+		var m = Style.priorityRegep.exec(value);
+		if (m) {
+			value = m[1];
+			this.domStyle.setProperty(prop, value, '!important');
+		} else {
+			this.domStyle[prop] = value;
+		}
 	}
 };
 
