@@ -46,15 +46,19 @@ use from browsers on multiple machines.
 - Connect vim using `:nbs:[host]` where host is the domain name of the server
   running vim-scissors.
 
+## Other
+
+- You may specify a site or filename filter in the `nbs` connection command,
+  for situations where you are using vim-scissors for more than one site. Give a
+  regexp as the password. Example: `:nbs:::^[^.]` will open only stylesheets
+  whose name does not begin with a dot.
+
 ## Todo
 
-- Allow specifying a site or filename filter in the `nbs` connection command,
-  for situations where you are using vim-scissors for more than one site.
-- Handle more CSS, including media queries and imports.
+- Handle more CSS, including imports.
 - Make a browser extension to add the script tag, or integrate with an existing
   extension, such as LiveReload.
-- Clean up code for diffing CSS. Factor out code common to both client and
-  server.
+- Factor out code common to both client and server.
 - Improve cross-browser compatibility
 
 ## License

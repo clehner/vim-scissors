@@ -4,7 +4,7 @@
   "description": "Live editing CSS in Vim",
   "main": "scissors.js",
   "dependencies": {
-    "vim-netbeans": "~2.0.1",
+    "vim-netbeans": "~2.0.2",
     "ws": "~0.4.31",
     "less": "~1.4.2",
     "css-parse": "~1.5.3"

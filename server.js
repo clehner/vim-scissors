@@ -35,7 +35,7 @@ var httpServer = http.createServer(function(req, res) {
   }
 });
 
-nbServer.on('clientAuthed', openSheetsInVimClient);
+nbServer.on('clientAuthed', onClientConnect);
 nbServer.listen(listenPort, listenHost);
 nbServer.handleHTTP(httpServer);
 
@@ -63,6 +63,17 @@ function setBufferText(buffer, text, cb) {
 }
 
 function openSheetInVimClient(sheet, client) {
+  var bufferName = sheet.name;
+  if (client.sheetNameRegexp) {
+    var m = client.sheetNameRegexp.exec(sheet.name);
+    if (!m) {
+      return;
+    } else if (m[1]) {
+      // allow using a grouping in the regex to reduce the name
+      bufferName = m[1];
+    }
+  }
+
   var buffer, bufferText = '';
 
   function onSheetParsed(error) {
@@ -93,7 +104,7 @@ function openSheetInVimClient(sheet, client) {
     newSheet.once('parsed', onSheetParsed);
   });
 
-  client.editFile(sheet.name, function(buf) {
+  client.editFile(bufferName, function(buf) {
     buffer = buf;
     var css = sheet.getText();
     setBufferText(buffer, css, function(err) {
@@ -126,15 +137,22 @@ function openSheetInVimClients(sheet) {
   });
 }
 
-function openSheetsInVimClient(client, password) {
+function onClientConnect(client, password) {
   console.log("> Vim client connection");
+  if (password != nb.VimServer.defaultPassword) {
+    client.sheetNameRegexp = new RegExp(password);
+  }
+  openSheetsInVimClient(client);
+  client.on("disconnected", function() {
+    console.log("> Vim client disconnected");
+  });
+}
+
+function openSheetsInVimClient(client) {
   for (var name in sheets) {
     var sheet = sheets[name];
     openSheetInVimClient(sheet, client);
   }
-  client.on("disconnected", function() {
-    console.log("> Vim client disconnected");
-  });
 }
 
 wss.on('connection', function(ws) {
