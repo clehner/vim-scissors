@@ -250,7 +250,7 @@ Keyframes.prototype.toString = function() {
 	return keyframes.join('\n\n');
 };
 
-Keyframes.prototype.toJSON = function () {
+Keyframes.prototype.toJSON = function() {
 	var obj = {};
 	for (var key in this.keyframes) {
 		obj[key] = this.keyframes[key].toJSON();
@@ -470,7 +470,7 @@ RulesList.prototype.applyDiff = function(diff) {
 function xhr(url, cb) {
 	var req = new XMLHttpRequest();
 	req.open('GET', url, true);
-	req.onreadystatechange = function () {
+	req.onreadystatechange = function() {
 		if (req.readyState == 4) {
 			cb(req.responseText);
 			delete req.onreadystatechange;

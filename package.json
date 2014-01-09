@@ -1,6 +1,6 @@
 {
   "name": "vim-scissors",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Live editing CSS in Vim",
   "main": "scissors.js",
   "dependencies": {
@@ -10,7 +10,10 @@
     "css-parse": "~1.5.3"
   },
   "scripts": {
-    "start": "node server.js"
+    "start": "node lib/server.js"
+  },
+  "bin": {
+    "vim-scissors": "./lib/server.js"
   },
   "repository": {
     "type": "git",
