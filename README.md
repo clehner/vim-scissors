@@ -7,7 +7,7 @@ Live edit CSS (and LESS) in Vim.
 - Add the script to your web page:
 
     ```
-<script src="http://localhost:3219/scissors.js"></script>
+<script src="http://localhost:3220/scissors.js"></script>
     ```
 
 - Start the **vim-scissors** server:
@@ -36,7 +36,7 @@ use from browsers on multiple machines.
 	```
 	<script>document.write('<script src="http://' + (location.host ||
 		'localhost').split(':')[0] +
-		':3219/scissors.js"></' + 'script>')</script>
+		':3220/scissors.js"></' + 'script>')</script>
 	```
 
 - Run vim-scissors from the machine that is serving your website.
@@ -44,7 +44,7 @@ use from browsers on multiple machines.
     `npm start`
 
 - Connect vim using `:nbs:[host]` where host is the domain name of the server
-  running vim-scissors.
+  running vim-scissors. It will default to connect on port 3219.
 
 ## Other
 
